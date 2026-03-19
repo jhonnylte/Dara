@@ -9,7 +9,9 @@ class DaraClientGUI:
     def __init__(self, root):
         self.root = root
         self.root.title("Dara - Jogo em Rede")
-        self.root.geometry("600x650")
+        self.root.geometry("600x850")
+
+    
 
         # Variáveis de estado local
         self.fase_atual = "DROP"
@@ -55,19 +57,55 @@ class DaraClientGUI:
         self.lbl_status = tk.Label(self.frame_jogo, text="", font=("Helvetica", 12))
         self.lbl_status.pack(pady=5)
 
+        # ==========================================
+        # NOVO: CHAT EMBUTIDO (Efeito Sanfona)
+        # ==========================================
+        self.btn_abrir_chat = tk.Button(self.frame_jogo, text="💬 Mostrar Chat", font=("Helvetica", 14), command=self.alternar_chat)
+        self.btn_abrir_chat.pack(pady=10)
+
+        # O Tabuleiro
         self.frame_tabuleiro = tk.Frame(self.frame_jogo, bg="black")
-        self.frame_tabuleiro.pack(pady=20)
+        self.frame_tabuleiro.pack(pady=5)
 
         self.botoes = [[None for _ in range(6)] for _ in range(5)]
         self.criar_tabuleiro()
+
+        # O Frame do chat fica por baixo do tabuleiro (mas não usamos o .pack() ainda para nascer escondido)
+        self.frame_chat = tk.Frame(self.frame_jogo)
+        self.chat_visivel = False # Variável para controlar se o chat está aberto ou fechado
+        
+        self.caixa_chat = tk.Text(self.frame_chat, height=5, width=40, state=tk.DISABLED, font=("Helvetica", 10))
+        self.caixa_chat.pack(side=tk.TOP, pady=5)
+
+        self.entrada_chat = tk.Entry(self.frame_chat, font=("Helvetica", 14), width=35)
+        self.entrada_chat.pack(side=tk.BOTTOM, pady=5)
+        self.entrada_chat.bind("<Return>", self.enviar_chat)
+        #==========================================
+
+       
+
+    def alternar_chat(self):
+        """Abre ou fecha o painel do chat dentro da mesma janela."""
+        if self.chat_visivel:
+            # Se está aberto, esconde
+            self.frame_chat.pack_forget()
+            self.btn_abrir_chat.config(text="💬 Mostrar Chat", bg="white")
+            self.chat_visivel = False
+        else:
+            # Se está fechado, mostra
+            self.frame_chat.pack(pady=10, before=self.frame_tabuleiro)
+            self.btn_abrir_chat.config(text="💬 Esconder Chat", bg="white")
+            self.chat_visivel = True
+            self.entrada_chat.focus() # Puxa o teclado para a barra de escrever
+
 
     def criar_tabuleiro(self):
         """Cria a grelha visual 5x6"""
         for r in range(5):
             for c in range(6):
                 btn = tk.Button(
-                    self.frame_tabuleiro, text="", width=4, height=2,
-                    font=("Helvetica", 24, "bold"), bg="white",
+                    self.frame_tabuleiro, text="", width=4, height=1,
+                    font=("Helvetica", 16, "bold"), bg="white",
                     command=lambda row=r, col=c: self.ao_clicar(row, col)
                 )
                 btn.grid(row=r, column=c, padx=2, pady=2)
@@ -135,6 +173,21 @@ class DaraClientGUI:
         self.lbl_info.config(text=texto_info, fg=cor_turno)
         self.lbl_status.config(text=msg_servidor)
 
+        jogador_atual = estado.get("current_player", 1)
+        msg_servidor = estado.get("mensagem", "")
+        
+        # --- ATUALIZA O CHAT E CRIA O ALERTA ---
+        chat_msg = estado.get("chat_msg", "")
+        if chat_msg:
+            self.caixa_chat.config(state=tk.NORMAL)
+            self.caixa_chat.insert(tk.END, chat_msg + "\n")
+            self.caixa_chat.see(tk.END)
+            self.caixa_chat.config(state=tk.DISABLED)
+            
+            # Se o chat estiver fechado, pinta o botão de amarelo!
+            if not self.chat_visivel:
+                self.btn_abrir_chat.config(text="💬 Nova Mensagem!", bg="yellow")
+
         tabuleiro = estado.get("board", [])
         if tabuleiro:
             for r in range(5):
@@ -144,6 +197,14 @@ class DaraClientGUI:
                     if valor == 0: btn.config(text="", bg="white")
                     elif valor == 1: btn.config(text="X", bg="lightblue", fg="blue")
                     elif valor == 2: btn.config(text="O", bg="lightcoral", fg="red")
+
+    def enviar_chat(self, event=None):
+        """Lê o texto, envia para o servidor e limpa a caixa de entrada."""
+        msg = self.entrada_chat.get().strip()
+        if msg:
+            comando = f"CHAT {msg}"
+            self.sock.sendall(comando.encode('utf-8'))
+            self.entrada_chat.delete(0, tk.END) # Limpa a caixa de texto
 
     def ao_clicar(self, r, c):
         if self.fase_atual == "DROP" or self.esperando_captura:

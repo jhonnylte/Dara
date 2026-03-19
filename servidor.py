@@ -10,18 +10,18 @@ jogo = DaraGame()
 clientes = {}
 lock = threading.Lock()
 
-def gerar_estado_json(mensagem=""):
-    """Empacota todas as variáveis cruciais do jogo num formato estruturado."""
+# Modifique a assinatura e o dicionário da função
+def gerar_estado_json(mensagem="", chat_msg=""):
     estado = {
-        "board": jogo.board, # Envia a matriz de números (0, 1 ou 2) pura!
+        "board": jogo.board,
         "current_player": jogo.current_player,
         "game_phase": jogo.game_phase,
         "waiting_for_capture": jogo.waiting_for_capture,
         "pieces_p1": jogo.pieces_to_drop[1],
         "pieces_p2": jogo.pieces_to_drop[2],
-        "mensagem": mensagem
+        "mensagem": mensagem,
+        "chat_msg": chat_msg  
     }
-    # Transforma o dicionário num texto formato JSON
     return json.dumps(estado)
 
 def enviar_para_todos(dados_json):
@@ -38,6 +38,15 @@ def lidar_com_cliente(conn, player_num):
             dados = conn.recv(1024).decode('utf-8').strip()
             if not dados: break
 
+            # --- NOVA LÓGICA DE CHAT ---
+            if dados.startswith("CHAT "):
+                # Pega em tudo o que vem depois da palavra "CHAT "
+                texto_chat = dados[5:] 
+                estado_chat = gerar_estado_json(chat_msg=f"Jogador {player_num}: {texto_chat}")
+                enviar_para_todos(estado_chat)
+                continue # Volta para o início do loop (ignora a lógica de jogada abaixo)
+            # ---------------------------
+            
             with lock:
                 if jogo.current_player != player_num:
                     msg_erro = gerar_estado_json(f"Erro: Não é o seu turno, Jogador {player_num}!")
