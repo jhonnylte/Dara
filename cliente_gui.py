@@ -1,4 +1,5 @@
 import tkinter as tk
+from tkinter import messagebox
 import socket
 import threading
 import json
@@ -197,6 +198,23 @@ class DaraClientGUI:
                     if valor == 0: btn.config(text="", bg="white")
                     elif valor == 1: btn.config(text="X", bg="lightblue", fg="blue")
                     elif valor == 2: btn.config(text="O", bg="lightcoral", fg="red")
+                    
+        # ==========================================
+        # NOVO: VERIFICAÇÃO DE FIM DE JOGO
+        # ==========================================
+        # O Tkinter vai procurar palavras-chave na mensagem do servidor
+        mensagem_min = msg_servidor.lower()
+        if "venceu" in mensagem_min or "ganhou" in mensagem_min or "fim" in mensagem_min:
+            # Mostra o pop-up gigante na tela
+            messagebox.showinfo("Fim de Partida!", msg_servidor)
+            
+            # Bloqueia todos os botões para não deixarem jogar mais
+            for r in range(5):
+                for c in range(6):
+                    self.botoes[r][c].config(state=tk.DISABLED)
+            
+            # Muda o botão do chat para permitir fechar o jogo
+            self.btn_abrir_chat.config(text="Sair do Jogo", bg="red", command=self.root.quit)
 
     def enviar_chat(self, event=None):
         """Lê o texto, envia para o servidor e limpa a caixa de entrada."""
