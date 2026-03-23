@@ -4,15 +4,13 @@ import socket
 import threading
 import json
 
-PORT = 65432 # A porta mantém-se a mesma
+PORT = 65432 
 
 class DaraClientGUI:
     def __init__(self, root):
         self.root = root
         self.root.title("Dara - Jogo em Rede")
         self.root.geometry("600x850")
-
-    
 
         # Variáveis de estado local
         self.fase_atual = "DROP"
@@ -21,10 +19,10 @@ class DaraClientGUI:
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
         # ==========================================
-        # ECRÃ 1: MENU DE LIGAÇÃO
+        # TELA 1: MENU DE LIGAÇÃO
         # ==========================================
         self.frame_conexao = tk.Frame(root)
-        self.frame_conexao.pack(expand=True, fill="both") # Mostra este ecrã primeiro
+        self.frame_conexao.pack(expand=True, fill="both") # Mostra este tela primeiro
 
         lbl_boas_vindas = tk.Label(self.frame_conexao, text="Bem-vindo ao Dara", font=("Helvetica", 24, "bold"))
         lbl_boas_vindas.pack(pady=(150, 20))
@@ -44,7 +42,7 @@ class DaraClientGUI:
         self.lbl_erro_conexao.pack(pady=5)
 
         # ==========================================
-        # ECRÃ 2: O JOGO (Escondido inicialmente)
+        # TELA 2: O JOGO (Escondido inicialmente)
         # ==========================================
         self.frame_jogo = tk.Frame(root)
         # Note que NÃO usamos o .pack() aqui ainda!
@@ -101,7 +99,7 @@ class DaraClientGUI:
 
 
     def criar_tabuleiro(self):
-        """Cria a grelha visual 5x6"""
+        # Cria a grelha visual 5x6
         for r in range(5):
             for c in range(6):
                 btn = tk.Button(
@@ -112,10 +110,10 @@ class DaraClientGUI:
                 btn.grid(row=r, column=c, padx=2, pady=2)
                 self.botoes[r][c] = btn
 
-    # --- LÓGICA DE REDE E TRANSIÇÃO DE ECRÃS ---
+    # --- LÓGICA DE REDE E TRANSIÇÃO DE TELAS ---
 
     def tentar_ligacao(self):
-        """Lê o IP digitado e tenta ligar ao servidor."""
+        # Lê o IP digitado e tenta ligar ao servidor.
         ip_digitado = self.entry_ip.get().strip()
         self.lbl_erro_conexao.config(text="A ligar...")
         self.root.update() # Força o Tkinter a atualizar o texto imediatamente
@@ -124,10 +122,10 @@ class DaraClientGUI:
             self.sock.connect((ip_digitado, PORT))
             
             # Se a ligação for bem-sucedida:
-            # 1. Esconde o ecrã de ligação
+            # 1. Esconde o tela de ligação
             self.frame_conexao.pack_forget()
             
-            # 2. Mostra o ecrã do jogo
+            # 2. Mostra o tela do jogo
             self.frame_jogo.pack(expand=True, fill="both")
             
             # 3. Inicia a Thread para ouvir o servidor
