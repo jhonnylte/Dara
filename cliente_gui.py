@@ -57,10 +57,20 @@ class DaraClientGUI:
         self.lbl_status.pack(pady=5)
 
         # ==========================================
-        # NOVO: CHAT EMBUTIDO (Efeito Sanfona)
+        # NOVO: BOTÕES LADO A LADO (Chat e Desistir)
         # ==========================================
-        self.btn_abrir_chat = tk.Button(self.frame_jogo, text="💬 Mostrar Chat", font=("Helvetica", 14), command=self.alternar_chat)
-        self.btn_abrir_chat.pack(pady=10)
+        # 1. Cria a caixa invisível para alinhar os botões
+        self.frame_botoes = tk.Frame(self.frame_jogo)
+        self.frame_botoes.pack(pady=10)
+
+        # 2. Coloca o botão do Chat dentro dessa caixa, encostado à esquerda
+        self.btn_abrir_chat = tk.Button(self.frame_botoes, text="💬 Mostrar Chat", font=("Helvetica", 14), command=self.alternar_chat)
+        self.btn_abrir_chat.pack(side=tk.LEFT, padx=10) # padx cria um espacinho entre eles
+
+        # 3. Coloca o botão de Desistir na mesma caixa, logo ao lado
+        self.btn_desistir = tk.Button(self.frame_botoes, text="🏳️ Desistir", font=("Helvetica", 12, "bold"), bg="lightcoral", fg="white", command=self.desistir)
+        self.btn_desistir.pack(side=tk.LEFT, padx=10)
+
 
         # O Tabuleiro
         self.frame_tabuleiro = tk.Frame(self.frame_jogo, bg="black")
@@ -221,6 +231,18 @@ class DaraClientGUI:
             comando = f"CHAT {msg}"
             self.sock.sendall(comando.encode('utf-8'))
             self.entrada_chat.delete(0, tk.END) # Limpa a caixa de texto
+
+    def desistir(self):
+        """Pede confirmação e avisa o servidor que este jogador desistiu."""
+        # Abre uma janela a perguntar se tem a certeza
+        confirmacao = messagebox.askyesno("Desistir", "Tem a certeza que quer desistir da partida?")
+        if confirmacao:
+            # Se disser que sim, envia o comando secreto para o servidor
+            comando = "RESIGN"
+            try:
+                self.sock.sendall(comando.encode('utf-8'))
+            except:
+                pass
 
     def ao_clicar(self, r, c):
         if self.fase_atual == "DROP" or self.esperando_captura:

@@ -47,6 +47,21 @@ def lidar_com_cliente(conn, player_num):
                 continue # Volta para o início do loop (ignora a lógica de jogada abaixo)
             # ---------------------------
             
+            # ==========================================
+            # NOVO: VERIFICAÇÃO DE DESISTÊNCIA
+            # ==========================================
+            if dados == "RESIGN":
+                # Descobre quem é o adversário (se o 1 desistiu, o 2 ganha)
+                vencedor = 2 if player_num == 1 else 1
+                mensagem_fim = f"O Jogador {player_num} desistiu! O Jogador {vencedor} VENCEU!"
+                
+                with lock:
+                    # Gera o JSON com a mensagem de vitória e envia para todos
+                    estado_final = gerar_estado_json(mensagem=mensagem_fim)
+                    enviar_para_todos(estado_final)
+                continue # Volta para o início do loop
+            # ==========================================
+            
             with lock:
                 if jogo.current_player != player_num:
                     msg_erro = gerar_estado_json(f"Erro: Não é o seu turno, Jogador {player_num}!")
