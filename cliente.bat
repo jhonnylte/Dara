@@ -1,2 +1,2 @@
 @echo off
-python cliente.py
+start /min python cliente.py
