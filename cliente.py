@@ -45,7 +45,6 @@ class DaraClientGUI:
         # TELA 2: O JOGO (Escondido inicialmente)
         # ==========================================
         self.frame_jogo = tk.Frame(root)
-        # Note que NÃO usamos o .pack() aqui ainda!
 
         self.lbl_titulo = tk.Label(self.frame_jogo, text="Dara - Multijogador", font=("Helvetica", 20, "bold"))
         self.lbl_titulo.pack(pady=10)
@@ -68,7 +67,7 @@ class DaraClientGUI:
         self.btn_abrir_chat.pack(side=tk.LEFT, padx=10) # padx cria um espacinho entre eles
 
         # 3. Coloca o botão de Desistir na mesma caixa, logo ao lado
-        self.btn_desistir = tk.Button(self.frame_botoes, text="🏳️ Desistir", font=("Helvetica", 12, "bold"), bg="lightcoral", fg="white", command=self.desistir)
+        self.btn_desistir = tk.Button(self.frame_botoes, text="🏴 Desistir", font=("Helvetica", 14), command=self.desistir)
         self.btn_desistir.pack(side=tk.LEFT, padx=10)
 
 
@@ -158,10 +157,22 @@ class DaraClientGUI:
                 while '\n' in buffer:
                     linha, buffer = buffer.split('\n', 1)
                     if linha.strip():
-                        estado_jogo = json.loads(linha)
-                        self.root.after(0, self.atualizar_interface, estado_jogo)
+                        if linha.startswith("ID "):
+                            meu_id = int(linha.strip().split(" ")[1]) # Extrai o número
+                            self.root.after(0, self.definir_meu_id, meu_id)
+                        else:
+                            # Se não for o ID, é o JSON normal do estado do jogo
+                            estado_jogo = json.loads(linha)
+                            self.root.after(0, self.atualizar_interface, estado_jogo)
             except:
                 break
+    
+    def definir_meu_id(self, id_recebido):
+        """Muda o título principal para mostrar quem é o jogador."""
+        self.meu_id = id_recebido
+        cor = "blue" if self.meu_id == 1 else "red"
+        # Altera diretamente o texto e a cor do título principal!
+        self.lbl_titulo.config(text=f"Jogador {self.meu_id}", fg=cor)
 
     def atualizar_interface(self, estado):
         self.fase_atual = estado.get("game_phase", "DROP")
@@ -225,7 +236,7 @@ class DaraClientGUI:
             self.btn_abrir_chat.config(text="Sair do Jogo", bg="red", command=self.root.quit)
 
     def enviar_chat(self, event=None):
-        """Lê o texto, envia para o servidor e limpa a caixa de entrada."""
+        # Lê o texto, envia para o servidor e limpa a caixa de entrada.
         msg = self.entrada_chat.get().strip()
         if msg:
             comando = f"CHAT {msg}"
@@ -233,7 +244,7 @@ class DaraClientGUI:
             self.entrada_chat.delete(0, tk.END) # Limpa a caixa de texto
 
     def desistir(self):
-        """Pede confirmação e avisa o servidor que este jogador desistiu."""
+        # Pede confirmação e avisa o servidor que este jogador desistiu.
         # Abre uma janela a perguntar se tem a certeza
         confirmacao = messagebox.askyesno("Desistir", "Tem a certeza que quer desistir da partida?")
         if confirmacao:

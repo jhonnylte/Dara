@@ -3,14 +3,13 @@ import threading
 import json
 from dara import DaraGame
 
-HOST = '0.0.0.0' # Pode voltar para localhost para testar a interface
+HOST = '0.0.0.0' # Aceita conexões de qualquer IP
 PORT = 65432
 
 jogo = DaraGame()
 clientes = {}
 lock = threading.Lock()
 
-# Modifique a assinatura e o dicionário da função
 def gerar_estado_json(mensagem="", chat_msg=""):
     estado = {
         "board": jogo.board,
@@ -38,30 +37,20 @@ def lidar_com_cliente(conn, player_num):
             dados = conn.recv(1024).decode('utf-8').strip()
             if not dados: break
 
-            # --- NOVA LÓGICA DE CHAT ---
             if dados.startswith("CHAT "):
-                # Pega em tudo o que vem depois da palavra "CHAT "
                 texto_chat = dados[5:] 
                 estado_chat = gerar_estado_json(chat_msg=f"Jogador {player_num}: {texto_chat}")
                 enviar_para_todos(estado_chat)
-                continue # Volta para o início do loop (ignora a lógica de jogada abaixo)
-            # ---------------------------
-            
-            # ==========================================
-            # NOVO: VERIFICAÇÃO DE DESISTÊNCIA
-            # ==========================================
+                continue 
+
             if dados == "RESIGN":
-                # Descobre quem é o adversário (se o 1 desistiu, o 2 ganha)
                 vencedor = 2 if player_num == 1 else 1
                 mensagem_fim = f"O Jogador {player_num} desistiu! O Jogador {vencedor} VENCEU!"
-                
                 with lock:
-                    # Gera o JSON com a mensagem de vitória e envia para todos
                     estado_final = gerar_estado_json(mensagem=mensagem_fim)
                     enviar_para_todos(estado_final)
-                continue # Volta para o início do loop
-            # ==========================================
-            
+                continue 
+
             with lock:
                 if jogo.current_player != player_num:
                     msg_erro = gerar_estado_json(f"Erro: Não é o seu turno, Jogador {player_num}!")
@@ -104,17 +93,18 @@ def iniciar_servidor():
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.bind((HOST, PORT))
     server_socket.listen(2)
-    print("=== SERVIDOR DARA INICIADO (Modo JSON) ===")
+    print("=== DARA: SERVIDOR DARA INICIADO ===")
     
     conn1, addr1 = server_socket.accept()
     clientes[1] = conn1
     print("Jogador 1 conectado.")
-    # Envia o estado inicial apenas para o J1 enquanto espera
+    conn1.sendall("ID 1\n".encode('utf-8'))
     conn1.sendall((gerar_estado_json("Bem-vindo Jogador 1. Aguardando oponente...") + "\n").encode('utf-8'))
 
     conn2, addr2 = server_socket.accept()
     clientes[2] = conn2
     print("Jogador 2 conectado.")
+    conn2.sendall("ID 2\n".encode('utf-8'))
     
     # O jogo começa!
     estado_inicial = gerar_estado_json("O jogo começou! Turno do Jogador 1.")
