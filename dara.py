@@ -7,19 +7,6 @@ class DaraGame:
         self.pieces_on_board = {1: 0, 2: 0}
         self.waiting_for_capture = False
 
-    def print_board(self):
-        # (Mesmo código da etapa anterior)
-        simbolos = {0: '.', 1: 'X', 2: 'O'}
-        print("\n  0 1 2 3 4 5")
-        for i, row in enumerate(self.board):
-            linha_formatada = " ".join([simbolos[cell] for cell in row])
-            print(f"{i} {linha_formatada}")
-        print(f"\nTurno: Jogador {self.current_player} ({simbolos[self.current_player]})")
-        print(f"Fase atual: {self.game_phase}")
-        print(f"Peças para colocar - J1: {self.pieces_to_drop[1]} | J2: {self.pieces_to_drop[2]}")
-
-    # --- NOVOS MÉTODOS DA FASE 2 ---
-
     def check_three_in_a_row(self, player):
         """Verifica o tabuleiro inteiro à procura de 3 peças seguidas do mesmo jogador."""
         # Verificar linhas (horizontal)
@@ -166,41 +153,3 @@ class DaraGame:
 def main():
     jogo = DaraGame()
     print("=== BEM-VINDO AO DARA ===")
-    
-    # --- LOOP DO JOGO ---
-    while jogo.game_phase != "END":
-        jogo.print_board()
-        
-        # ESTADO 1: FASE DE COLOCAÇÃO
-        if jogo.game_phase == "DROP":
-            entrada = input(f"Jogador {jogo.current_player} (COLOCAR) - Digite 'linha coluna': ")
-            try:
-                r, c = map(int, entrada.split())
-                sucesso, msg = jogo.play_drop(r, c)
-                print(f"-> {msg}")
-            except:
-                print("-> Erro: Formato inválido.")
-                
-        # ESTADO 2: ESPERANDO CAPTURA (Alguém fez trinca)
-        elif jogo.waiting_for_capture:
-            entrada = input(f"Jogador {jogo.current_player} (CAPTURAR) - Digite a 'linha coluna' da peça do oponente para remover: ")
-            try:
-                r, c = map(int, entrada.split())
-                sucesso, msg = jogo.play_capture(r, c)
-                print(f"-> {msg}")
-            except:
-                print("-> Erro: Formato inválido.")
-                
-        # ESTADO 3: FASE DE MOVIMENTO
-        elif jogo.game_phase == "MOVE":
-            entrada = input(f"Jogador {jogo.current_player} (MOVER) - Digite 'linha_origem coluna_origem linha_destino coluna_destino': ")
-            try:
-                r_from, c_from, r_to, c_to = map(int, entrada.split())
-                sucesso, msg = jogo.play_move(r_from, c_from, r_to, c_to)
-                print(f"-> {msg}")
-            except:
-                print("-> Erro: Formato inválido. Use 4 números (ex: 1 2 1 3).")
-
-    # FIM DE JOGO
-    jogo.print_board()
-    print("\nO JOGO TERMINOU!")
