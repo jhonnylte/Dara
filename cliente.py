@@ -1,8 +1,8 @@
 import tkinter as tk
 from tkinter import messagebox
-import socket
 import threading
-import json
+import xmlrpc.client 
+import time
 
 PORT = 65432 
 
@@ -122,29 +122,27 @@ class DaraClientGUI:
     # --- LÓGICA DE REDE E TRANSIÇÃO DE TELAS ---
 
     def tentar_ligacao(self):
-        # Lê o IP digitado e tenta ligar ao servidor.
         ip_digitado = self.entry_ip.get().strip()
-        self.lbl_erro_conexao.config(text="A ligar...")
-        self.root.update() # Força o Tkinter a atualizar o texto imediatamente
-
+        
         try:
-            self.sock.connect((ip_digitado, PORT))
+            # 1. Cria a ligação mágica (O Stub)
+            self.servidor = xmlrpc.client.ServerProxy(f"http://{ip_digitado}:65432")
             
-            # Se a ligação for bem-sucedida:
-            # 1. Esconde o tela de ligação
-            self.frame_conexao.pack_forget()
+            # 2. CHAMA UMA FUNÇÃO REMOTA!
+            meu_id = self.servidor.entrar_no_jogo()
             
-            # 2. Mostra o tela do jogo
-            self.frame_jogo.pack(expand=True, fill="both")
-            
-            # 3. Inicia a Thread para ouvir o servidor
-            threading.Thread(target=self.receber_mensagens, daemon=True).start()
-            
+            if meu_id > 0:
+                self.definir_meu_id(meu_id)
+                self.frame_conexao.pack_forget()
+                self.frame_jogo.pack(expand=True, fill="both")
+                
+                # Inicia a Thread para vigiar o servidor
+                threading.Thread(target=self.vigiar_servidor, daemon=True).start()
+            else:
+                self.lbl_erro_conexao.config(text="Erro: Sala cheia.")
+                
         except Exception as e:
-            # Se falhar (IP errado ou servidor desligado)
-            self.lbl_erro_conexao.config(text="Erro: Servidor não encontrado neste IP.")
-            # Reiniciamos o socket para permitir uma nova tentativa
-            self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+             self.lbl_erro_conexao.config(text="Erro de ligação.")
 
     def receber_mensagens(self):
         buffer = ""
@@ -256,17 +254,36 @@ class DaraClientGUI:
                 pass
 
     def ao_clicar(self, r, c):
-        if self.fase_atual == "DROP" or self.esperando_captura:
-            self.sock.sendall(f"{r} {c}".encode('utf-8'))
+        # AQUI ESTÁ A MAGIA DO RMI:
+        if self.fase_atual == "DROP":
+            # Chamamos a função no servidor DIRETAMENTE
+            sucesso, msg = self.servidor.play_drop(r, c)
+            if not sucesso:
+                print(f"Erro: {msg}") # O servidor respondeu imediatamente!
+
         elif self.fase_atual == "MOVE":
             if self.peca_selecionada is None:
                 self.peca_selecionada = (r, c)
                 self.botoes[r][c].config(bg="yellow")
-                self.lbl_status.config(text=f"Peça em ({r},{c}) selecionada. Escolha o destino.")
             else:
                 r_origem, c_origem = self.peca_selecionada
-                self.sock.sendall(f"{r_origem} {c_origem} {r} {c}".encode('utf-8'))
-                self.peca_selecionada = None 
+                # Olha o RMI de novo!
+                self.servidor.play_move(r_origem, c_origem, r, c)
+                self.peca_selecionada = None
+    
+    def vigiar_servidor(self):
+        """Pergunta ao servidor o estado do jogo repetidamente (Polling)."""
+        while True:
+            try:
+                # O cliente invoca a função obter_estado() lá no servidor
+                estado_jogo = self.servidor.obter_estado()
+                
+                # E passa para a interface (A sua função atualizar_interface continua IGUAL!)
+                self.root.after(0, self.atualizar_interface, estado_jogo)
+                
+                time.sleep(0.5) # Espera meio segundo e pergunta de novo
+            except:
+                break
 
 if __name__ == "__main__":
     janela = tk.Tk()

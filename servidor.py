@@ -1,122 +1,44 @@
-import socket
-import threading
-import json
+from xmlrpc.server import SimpleXMLRPCServer
 from dara import DaraGame
 
-HOST = '0.0.0.0' # Aceita conexões de qualquer IP
-PORT = 65432
+class DaraServidorRMI:
+    def __init__(self):
+        self.jogo = DaraGame()
+        self.jogadores_conectados = 0
 
-jogo = DaraGame()
-clientes = {}
-lock = threading.Lock()
+    # 1. Função para os clientes se registarem
+    def entrar_no_jogo(self):
+        if self.jogadores_conectados < 2:
+            self.jogadores_conectados += 1
+            return self.jogadores_conectados # Retorna ID 1 ou 2
+        return 0 # Sala cheia
 
-def gerar_estado_json(mensagem="", chat_msg=""):
-    estado = {
-        "board": jogo.board,
-        "current_player": jogo.current_player,
-        "game_phase": jogo.game_phase,
-        "waiting_for_capture": jogo.waiting_for_capture,
-        "pieces_p1": jogo.pieces_to_drop[1],
-        "pieces_p2": jogo.pieces_to_drop[2],
-        "mensagem": mensagem,
-        "chat_msg": chat_msg  
-    }
-    return json.dumps(estado)
+    # 2. Funções de jogada (Chamadas DIRETAMENTE pelo cliente!)
+    def play_drop(self, r, c):
+        return self.jogo.play_drop(r, c)
 
-def enviar_para_todos(dados_json):
-    for conn in clientes.values():
-        try:
-            # Adicionamos um delimitador \n no final para o cliente saber onde a mensagem acaba
-            conn.sendall((dados_json + "\n").encode('utf-8'))
-        except:
-            pass
+    def play_move(self, r1, c1, r2, c2):
+        return self.jogo.play_move(r1, c1, r2, c2)
 
-def lidar_com_cliente(conn, player_num):
-    while True:
-        try:
-            dados = conn.recv(1024).decode('utf-8').strip()
-            if not dados: break
+    def play_capture(self, r, c):
+        return self.jogo.play_capture(r, c)
 
-            if dados.startswith("CHAT "):
-                texto_chat = dados[5:] 
-                estado_chat = gerar_estado_json(chat_msg=f"Jogador {player_num}: {texto_chat}")
-                enviar_para_todos(estado_chat)
-                continue 
+    # 3. Função para o cliente "perguntar" como está o jogo
+    def obter_estado(self):
+        return {
+            "board": self.jogo.board,
+            "current_player": self.jogo.current_player,
+            "game_phase": self.jogo.game_phase,
+            "waiting_for_capture": self.jogo.waiting_for_capture
+        }
 
-            if dados == "RESIGN":
-                vencedor = 2 if player_num == 1 else 1
-                mensagem_fim = f"O Jogador {player_num} desistiu! O Jogador {vencedor} VENCEU!"
-                with lock:
-                    estado_final = gerar_estado_json(mensagem=mensagem_fim)
-                    enviar_para_todos(estado_final)
-                continue 
+# --- Inicialização da Magia do RMI ---
+print("=== Servidor Dara RMI (XML-RPC) Iniciado ===")
+# Cria o Skeleton na porta 65432
+server = SimpleXMLRPCServer(("0.0.0.0", 65432), allow_none=True)
 
-            with lock:
-                if jogo.current_player != player_num:
-                    msg_erro = gerar_estado_json(f"Erro: Não é o seu turno, Jogador {player_num}!")
-                    conn.sendall((msg_erro + "\n").encode('utf-8'))
-                    continue
+# Expõe a nossa classe para a internet!
+server.register_instance(DaraServidorRMI())
 
-                sucesso = False
-                msg = ""
-
-                try:
-                    valores = list(map(int, dados.split()))
-                    if jogo.game_phase == "DROP":
-                        sucesso, msg = jogo.play_drop(valores[0], valores[1])
-                    elif jogo.waiting_for_capture:
-                        sucesso, msg = jogo.play_capture(valores[0], valores[1])
-                    elif jogo.game_phase == "MOVE":
-                        sucesso, msg = jogo.play_move(valores[0], valores[1], valores[2], valores[3])
-                except:
-                    msg_erro = gerar_estado_json("Erro: Formato de comando inválido.")
-                    conn.sendall((msg_erro + "\n").encode('utf-8'))
-                    continue
-
-                if sucesso:
-                    # Se a jogada deu certo, envia o novo tabuleiro para os dois
-                    estado_atual = gerar_estado_json(f"Jogador {player_num} jogou: {msg}")
-                    enviar_para_todos(estado_atual)
-                else:
-                    # Se deu erro, avisa só quem tentou jogar errado
-                    msg_erro = gerar_estado_json(f"Jogada inválida: {msg}")
-                    conn.sendall((msg_erro + "\n").encode('utf-8'))
-
-        except Exception as e:
-            print(f"Erro com Jogador {player_num}: {e}")
-            break
-
-    print(f"Jogador {player_num} desconectou.")
-    conn.close()
-
-def iniciar_servidor():
-    server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server_socket.bind((HOST, PORT))
-    server_socket.listen(2)
-    print("=== DARA: SERVIDOR DARA INICIADO ===")
-    
-    conn1, addr1 = server_socket.accept()
-    clientes[1] = conn1
-    print("Jogador 1 conectado.")
-    conn1.sendall("ID 1\n".encode('utf-8'))
-    conn1.sendall((gerar_estado_json("Bem-vindo Jogador 1. Aguardando oponente...") + "\n").encode('utf-8'))
-
-    conn2, addr2 = server_socket.accept()
-    clientes[2] = conn2
-    print("Jogador 2 conectado.")
-    conn2.sendall("ID 2\n".encode('utf-8'))
-    
-    # O jogo começa!
-    estado_inicial = gerar_estado_json("O jogo começou! Turno do Jogador 1.")
-    enviar_para_todos(estado_inicial)
-
-    threading.Thread(target=lidar_com_cliente, args=(conn1, 1), daemon=True).start()
-    threading.Thread(target=lidar_com_cliente, args=(conn2, 2), daemon=True).start()
-
-    try:
-        while True: pass
-    except KeyboardInterrupt:
-        server_socket.close()
-
-if __name__ == "__main__":
-    iniciar_servidor()
+# Fica à espera de chamadas de métodos
+server.serve_forever()
