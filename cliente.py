@@ -16,7 +16,7 @@ class DaraClientGUI:
         self.fase_atual = "DROP"
         self.esperando_captura = False
         self.peca_selecionada = None
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.jogo_terminou = False
 
         # ==========================================
         # TELA 1: MENU DE LIGAÇÃO
@@ -58,6 +58,9 @@ class DaraClientGUI:
         # ==========================================
         # NOVO: BOTÕES LADO A LADO (Chat e Desistir)
         # ==========================================
+
+        self.ultimo_chat_visto = ""
+
         # 1. Cria a caixa invisível para alinhar os botões
         self.frame_botoes = tk.Frame(self.frame_jogo)
         self.frame_botoes.pack(pady=10)
@@ -144,7 +147,7 @@ class DaraClientGUI:
         except Exception as e:
              self.lbl_erro_conexao.config(text="Erro de ligação.")
 
-    def receber_mensagens(self):
+    """def receber_mensagens(self):
         buffer = ""
         while True:
             try:
@@ -163,7 +166,7 @@ class DaraClientGUI:
                             estado_jogo = json.loads(linha)
                             self.root.after(0, self.atualizar_interface, estado_jogo)
             except:
-                break
+                break"""
     
     def definir_meu_id(self, id_recebido):
         """Muda o título principal para mostrar quem é o jogador."""
@@ -194,17 +197,23 @@ class DaraClientGUI:
         jogador_atual = estado.get("current_player", 1)
         msg_servidor = estado.get("mensagem", "")
         
-        # --- ATUALIZA O CHAT E CRIA O ALERTA ---
-        chat_msg = estado.get("chat_msg", "")
-        if chat_msg:
+        # --- ATUALIZA O CHAT (Versão RMI) ---
+        chat_atual = estado.get("chat_completo", "")
+        
+        # Só atualiza a interface se o servidor tiver mensagens novas!
+        if chat_atual != self.ultimo_chat_visto:
             self.caixa_chat.config(state=tk.NORMAL)
-            self.caixa_chat.insert(tk.END, chat_msg + "\n")
+            self.caixa_chat.delete(1.0, tk.END) # Apaga o histórico velho
+            self.caixa_chat.insert(tk.END, chat_atual) # Escreve o histórico novo inteiro
             self.caixa_chat.see(tk.END)
             self.caixa_chat.config(state=tk.DISABLED)
             
-            # Se o chat estiver fechado, pinta o botão de amarelo!
+            # Se o chat estiver fechado, pinta o botão de amarelo
             if not self.chat_visivel:
                 self.btn_abrir_chat.config(text="💬 Nova Mensagem!", bg="yellow")
+                
+            # Atualiza a memória do cliente
+            self.ultimo_chat_visto = chat_atual
 
         tabuleiro = estado.get("board", [])
         if tabuleiro:
@@ -221,7 +230,11 @@ class DaraClientGUI:
         # ==========================================
         # O Tkinter vai procurar palavras-chave na mensagem do servidor
         mensagem_min = msg_servidor.lower()
-        if "venceu" in mensagem_min or "ganhou" in mensagem_min or "fim" in mensagem_min:
+        # Só mostra se tiver a palavra E se o jogo ainda não tiver terminado
+        if not self.jogo_terminou and ("venceu" in mensagem_min or "ganhou" in mensagem_min):
+            
+            self.jogo_terminou = True # <--- Trava ativada! O pop-up não repete mais.
+            
             # Mostra o pop-up gigante na tela
             messagebox.showinfo("Fim de Partida!", msg_servidor)
             
@@ -234,32 +247,30 @@ class DaraClientGUI:
             self.btn_abrir_chat.config(text="Sair do Jogo", bg="red", command=self.root.quit)
 
     def enviar_chat(self, event=None):
-        # Lê o texto, envia para o servidor e limpa a caixa de entrada.
+        """Envia a mensagem chamando a função RMI diretamente."""
         msg = self.entrada_chat.get().strip()
         if msg:
-            comando = f"CHAT {msg}"
-            self.sock.sendall(comando.encode('utf-8'))
+            # MAGIA RMI: Diz ao servidor para colar a mensagem no quadro
+            self.servidor.enviar_chat(self.meu_id, msg)
             self.entrada_chat.delete(0, tk.END) # Limpa a caixa de texto
 
     def desistir(self):
-        # Pede confirmação e avisa o servidor que este jogador desistiu.
-        # Abre uma janela a perguntar se tem a certeza
+        """Pede confirmação e avisa o servidor RMI da desistência."""
         confirmacao = messagebox.askyesno("Desistir", "Tem a certeza que quer desistir da partida?")
         if confirmacao:
-            # Se disser que sim, envia o comando secreto para o servidor
-            comando = "RESIGN"
             try:
-                self.sock.sendall(comando.encode('utf-8'))
-            except:
-                pass
+                # Invoca a função remotamente!
+                self.servidor.desistir(self.meu_id)
+            except Exception as e:
+                print("Erro ao comunicar desistência.")
 
     def ao_clicar(self, r, c):
         # AQUI ESTÁ A MAGIA DO RMI:
         if self.fase_atual == "DROP":
-            # Chamamos a função no servidor DIRETAMENTE
-            sucesso, msg = self.servidor.play_drop(r, c)
+            # Agora enviamos o nosso ID (self.meu_id) para o servidor nos reconhecer!
+            sucesso, msg = self.servidor.play_drop(self.meu_id, r, c)
             if not sucesso:
-                print(f"Erro: {msg}") # O servidor respondeu imediatamente!
+                self.lbl_status.config(text=msg) # Mostra o erro ("Não é o seu turno!")
 
         elif self.fase_atual == "MOVE":
             if self.peca_selecionada is None:
@@ -267,21 +278,22 @@ class DaraClientGUI:
                 self.botoes[r][c].config(bg="yellow")
             else:
                 r_origem, c_origem = self.peca_selecionada
-                # Olha o RMI de novo!
-                self.servidor.play_move(r_origem, c_origem, r, c)
+                # Envia o ID aqui também!
+                sucesso, msg = self.servidor.play_move(self.meu_id, r_origem, c_origem, r, c)
+                if not sucesso:
+                    self.lbl_status.config(text=msg)
                 self.peca_selecionada = None
-    
     def vigiar_servidor(self):
-        """Pergunta ao servidor o estado do jogo repetidamente (Polling)."""
+        # Pergunta ao servidor o estado do jogo repetidamente
         while True:
             try:
                 # O cliente invoca a função obter_estado() lá no servidor
                 estado_jogo = self.servidor.obter_estado()
                 
-                # E passa para a interface (A sua função atualizar_interface continua IGUAL!)
+                # E passa para a interface atualizar o que o servidor respondeu (que é o estado do jogo)
                 self.root.after(0, self.atualizar_interface, estado_jogo)
                 
-                time.sleep(0.5) # Espera meio segundo e pergunta de novo
+                time.sleep(0.5) 
             except:
                 break
 
